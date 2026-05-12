@@ -18,6 +18,9 @@ interface MatchState {
   matchId: string | null;
   matchContext: MatchContext | null;
   predictionHistory: AnalysisResult[];
+  isSubmitting: boolean;
+  submissionError: string | null;
+
   setUser: (user: User) => void;
   placeFielder: (position: string) => void;
   clearFielders: () => void;
@@ -30,6 +33,9 @@ interface MatchState {
   setLiveCounter: (counter: number) => void;
   setLiveOvers: (overs: Over[], source: 'live' | 'demo', title: string, matchId?: string) => void;
   setMatchContext: (ctx: MatchContext) => void;
+  setSubmitting: (val: boolean) => void;
+  setSubmissionError: (err: string | null) => void;
+  updateScoresFromOvers: () => void;
   reset: () => void;
 }
 
@@ -49,11 +55,15 @@ const initialState = {
   matchId: null as string | null,
   matchContext: null as MatchContext | null,
   predictionHistory: [] as AnalysisResult[],
+  isSubmitting: false,
+  submissionError: null as string | null,
 };
 
 export const useMatchStore = create<MatchState>((set) => ({
   ...initialState,
+
   setUser: (user) => set({ user, phase: 'predict' }),
+
   placeFielder: (position) =>
     set((state) => {
       const exists = state.fanPlacements.includes(position);
@@ -65,65 +75,115 @@ export const useMatchStore = create<MatchState>((set) => ({
             : state.fanPlacements,
       };
     }),
+
   clearFielders: () => set({ fanPlacements: [] }),
+
   selectBowler: (name) =>
     set((state) => ({
       selectedBowler: state.selectedBowler === name ? null : name,
     })),
+
   selectCaptain: (name) =>
     set({ selectedCaptain: name }),
-  submitPrediction: () => set({ phase: 'submitted' }),
+
+  submitPrediction: () => set({ phase: 'submitted', isSubmitting: true, submissionError: null }),
+
   revealResult: (result) =>
-    set((state) => ({
-      phase: 'result',
-      overScores: [...state.overScores, result],
-      showResult: true,
-    })),
+    set((state) => {
+      const newScores = [...state.overScores, result];
+      return {
+        phase: 'result',
+        overScores: newScores,
+        showResult: true,
+        isSubmitting: false,
+        submissionError: null,
+      };
+    }),
+
   nextOver: () =>
-    set((state) => ({
-      currentOverIndex: state.currentOverIndex + 1,
-      fanPlacements: [],
-      selectedBowler: null,
-      selectedCaptain: null,
-      phase: 'predict',
-      showResult: false,
-    })),
+    set((state) => {
+      const nextIdx = state.currentOverIndex + 1;
+      const isComplete = nextIdx >= state.liveOvers.length;
+      return {
+        currentOverIndex: nextIdx,
+        fanPlacements: [],
+        selectedBowler: null,
+        phase: isComplete ? 'summary' : 'predict',
+        showResult: false,
+        isSubmitting: false,
+        submissionError: null,
+      };
+    }),
+
   setPhase: (phase) => set({ phase }),
+
   setLiveCounter: (counter) => set({ liveCounter: counter }),
+
+  setSubmitting: (val) => set({ isSubmitting: val }),
+
+  setSubmissionError: (err) => set({ submissionError: err }),
+
   setLiveOvers: (overs, source, title, matchId) => {
-    // Auto-build match context from overs/teams
-    const firstOver = overs[0];
-    const lastOver = overs[overs.length - 1];
-    const team1Name = firstOver?.batsmanNonStrike || 'Team 1';
-    const team2Name = firstOver?.batsmanOnStrike || 'Team 2';
-    const team1 = iplTeams2026.find((t) => team1Name.toLowerCase().includes(t.short.toLowerCase()) || team1Name.includes(t.name.split(' ')[0]));
-    const team2 = iplTeams2026.find((t) => team2Name.toLowerCase().includes(t.short.toLowerCase()) || team2Name.includes(t.name.split(' ')[0]));
-
-    const ctx: MatchContext = {
-      team1: {
-        name: team1?.name || team1Name,
-        short: team1?.short || team1Name.substring(0, 2).toUpperCase(),
-        captain: team1?.captain || 'Unknown',
-        players: team1?.players || [],
-        score: lastOver?.runningScore ? { ...lastOver.runningScore, overs: lastOver.overNumber } : { runs: 0, wickets: 0, overs: 0 },
-        batting: true,
-      },
-      team2: {
-        name: team2?.name || team2Name,
-        short: team2?.short || team2Name.substring(0, 2).toUpperCase(),
-        captain: team2?.captain || 'Unknown',
-        players: team2?.players || [],
-        score: { runs: 0, wickets: 0, overs: 0 },
-        batting: false,
-      },
-      currentOver: 0,
-      venue: 'Stadium',
-      matchTitle: title,
-      tossWinner: team1?.short || team1Name.substring(0, 2).toUpperCase(),
-    };
-
-    set({ liveOvers: overs, dataSource: source, matchTitle: title, matchId: matchId || null, matchContext: ctx });
+    set((state) => {
+      if (state.matchContext) {
+        return { liveOvers: overs, dataSource: source, matchTitle: title, matchId: matchId || null };
+      }
+      const firstOver = overs[0];
+      const lastOver = overs[overs.length - 1];
+      const team1Name = firstOver?.batsmanNonStrike || 'Team 1';
+      const team2Name = firstOver?.batsmanOnStrike || 'Team 2';
+      const team1 = iplTeams2026.find((t) =>
+        team1Name.toLowerCase().includes(t.short.toLowerCase()) ||
+        team1Name.includes(t.name.split(' ')[0])
+      );
+      const team2 = iplTeams2026.find((t) =>
+        team2Name.toLowerCase().includes(t.short.toLowerCase()) ||
+        team2Name.includes(t.name.split(' ')[0])
+      );
+      const lastScore = lastOver?.runningScore || { runs: 0, wickets: 0 };
+      const ctx: MatchContext = {
+        team1: {
+          name: team1?.name || team1Name,
+          short: team1?.short || team1Name.substring(0, 2).toUpperCase(),
+          captain: team1?.captain || 'Unknown',
+          players: team1?.players || [],
+          score: { ...lastScore, overs: lastOver?.overNumber || 0 },
+          batting: true,
+        },
+        team2: {
+          name: team2?.name || team2Name,
+          short: team2?.short || team2Name.substring(0, 2).toUpperCase(),
+          captain: team2?.captain || 'Unknown',
+          players: team2?.players || [],
+          score: { runs: 0, wickets: 0, overs: 0 },
+          batting: false,
+        },
+        currentOver: 0,
+        venue: 'Stadium',
+        matchTitle: title,
+        tossWinner: team1?.short || team1Name.substring(0, 2).toUpperCase(),
+      };
+      return { liveOvers: overs, dataSource: source, matchTitle: title, matchId: matchId || null, matchContext: ctx };
+    });
   },
+
   setMatchContext: (ctx) => set({ matchContext: ctx }),
+
+  updateScoresFromOvers: () =>
+    set((state) => {
+      if (!state.matchContext || state.liveOvers.length === 0) return state;
+      const currentOver = state.liveOvers[state.currentOverIndex];
+      if (!currentOver) return state;
+      return {
+        matchContext: {
+          ...state.matchContext,
+          team1: {
+            ...state.matchContext.team1,
+            score: { ...currentOver.runningScore, overs: currentOver.overNumber },
+          },
+        },
+      };
+    }),
+
   reset: () => set({ ...initialState, liveCounter: 2341 }),
 }));

@@ -9,6 +9,22 @@ export interface IPLTeam {
 
 export const iplTeams2026: IPLTeam[] = [
   {
+    name: 'Gujarat Titans',
+    short: 'GT',
+    captain: 'Shubman Gill',
+    logo: 'GT',
+    homeGround: 'Narendra Modi Stadium, Ahmedabad',
+    players: ['Shubman Gill', 'Sai Sudharsan', 'Jos Buttler', 'Shahrukh Khan', 'Rahul Tewatia', 'Washington Sundar', 'Glenn Phillips', 'Jason Holder', 'Rashid Khan', 'Kagiso Rabada', 'Mohammed Siraj', 'Prasidh Krishna', 'Ishant Sharma', 'Sai Kishore', 'Jayant Yadav', 'Nishant Sindhu', 'Manav Suthar', 'Anuj Rawat', 'Kumar Kushagra', 'Tom Banton', 'Gurnoor Brar', 'Luke Wood', 'Ashok Sharma', 'Kulwant Khejroliya'],
+  },
+  {
+    name: 'Sunrisers Hyderabad',
+    short: 'SRH',
+    captain: 'Pat Cummins',
+    logo: 'SRH',
+    homeGround: 'Rajiv Gandhi International Stadium, Hyderabad',
+    players: ['Pat Cummins', 'Travis Head', 'Abhishek Sharma', 'Ishan Kishan', 'Heinrich Klaasen', 'Nitish Kumar Reddy', 'Harshal Patel', 'Jaydev Unadkat', 'Eshan Malinga', 'Zeeshan Ansari', 'Liam Livingstone', 'Kamindu Mendis', 'Brydon Carse', 'Shivam Mavi', 'Aniket Verma', 'Smaran Ravichandran', 'Harsh Dubey', 'Salil Arora', 'Shivang Kumar', 'Onkar Tarmale', 'Krains Fuletra', 'Praful Hinge', 'Amit Kumar', 'Sakib Hussain', 'Jack Edwards'],
+  },
+  {
     name: 'Mumbai Indians',
     short: 'MI',
     captain: 'Hardik Pandya',
@@ -49,14 +65,6 @@ export const iplTeams2026: IPLTeam[] = [
     players: ['Sanju Samson', 'Jos Buttler', 'Yashasvi Jaiswal', 'Riyan Parag', 'Shimron Hetmyer', 'Dhruv Jurel', 'Ravichandran Ashwin', 'Trent Boult', 'Sandeep Sharma', 'Yuzvendra Chahal', 'Avesh Khan'],
   },
   {
-    name: 'Sunrisers Hyderabad',
-    short: 'SRH',
-    captain: 'Pat Cummins',
-    logo: 'SRH',
-    homeGround: 'Rajiv Gandhi Stadium, Hyderabad',
-    players: ['Pat Cummins', 'David Warner', 'Aiden Markram', 'Heinrich Klaasen', 'Abdul Samad', 'Rahul Tripathi', 'Umran Malik', 'Bhuvneshwar Kumar', 'T Natarajan', 'Washington Sundar', 'Mayank Agarwal'],
-  },
-  {
     name: 'Delhi Capitals',
     short: 'DC',
     captain: 'Rishabh Pant',
@@ -79,14 +87,6 @@ export const iplTeams2026: IPLTeam[] = [
     logo: 'LSG',
     homeGround: 'Ekana Stadium, Lucknow',
     players: ['KL Rahul', 'Quinton de Kock', 'Marcus Stoinis', 'Nicholas Pooran', 'Deepak Hooda', 'Krunal Pandya', 'Ravi Bishnoi', 'Mark Wood', 'Avesh Khan', 'Mohan Singh', 'Ayush Badoni'],
-  },
-  {
-    name: 'Gujarat Titans',
-    short: 'GT',
-    captain: 'Shubman Gill',
-    logo: 'GT',
-    homeGround: 'Narendra Modi Stadium, Ahmedabad',
-    players: ['Shubman Gill', 'David Miller', 'Kane Williamson', 'B Sai Sudharsan', 'Rahul Tewatia', 'Rashid Khan', 'Mohammed Shami', 'Noor Ahmad', 'Josh Little', 'Wriddhiman Saha', 'Darshan Nalkande'],
   },
 ];
 

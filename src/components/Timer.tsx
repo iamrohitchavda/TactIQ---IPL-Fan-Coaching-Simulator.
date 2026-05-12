@@ -1,63 +1,96 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
+import { motion } from 'framer-motion';
 import { useMatchStore } from '../store/matchStore';
 
 export default function Timer() {
   const { phase, submitPrediction } = useMatchStore();
   const [timeLeft, setTimeLeft] = useState(30);
-  const [started, setStarted] = useState(false);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    if (phase === 'predict' && !started) {
-      setStarted(true);
-      setTimeLeft(30);
-    }
     if (phase !== 'predict') {
-      setStarted(false);
-      setTimeLeft(30);
-    }
-  }, [phase, started]);
-
-  useEffect(() => {
-    if (!started || phase !== 'predict') return;
-    if (timeLeft <= 0) {
-      submitPrediction();
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
       return;
     }
-    const id = setTimeout(() => setTimeLeft((p) => p - 1), 1000);
-    return () => clearTimeout(id);
-  }, [timeLeft, started, phase, submitPrediction]);
+
+    intervalRef.current = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          if (intervalRef.current) clearInterval(intervalRef.current);
+          submitPrediction();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [phase, submitPrediction]);
 
   const pct = timeLeft / 30;
+  const circumference = 2 * Math.PI * 48;
+  const dashOffset = circumference * (1 - pct);
+
   const color =
-    timeLeft > 15
-      ? '#00FF87'
-      : timeLeft > 5
-        ? '#FF6B00'
-        : '#FF3B5C';
+    timeLeft > 15 ? '#00FF9D' :
+    timeLeft > 8 ? '#FFD700' :
+    '#FF3B5C';
+
+  const glowColor =
+    timeLeft > 15 ? 'rgba(0,255,157,0.3)' :
+    timeLeft > 8 ? 'rgba(255,215,0,0.3)' :
+    'rgba(255,59,92,0.5)';
 
   return (
-    <div className="bg-bg-card border border-white/10 rounded-xl p-6 flex flex-col items-center">
+    <div className="glass-panel p-5 flex flex-col items-center">
       <div className="relative w-28 h-28 flex items-center justify-center">
+        <div
+          className="absolute inset-0 rounded-full"
+          style={{
+            boxShadow: timeLeft <= 8 ? `0 0 30px ${glowColor}` : 'none',
+            transition: 'box-shadow 0.5s ease',
+          }}
+        />
+
         <svg className="absolute inset-0 w-28 h-28 -rotate-90" viewBox="0 0 120 120">
-          <circle cx="60" cy="60" r="52" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="6" />
+          <circle cx="60" cy="60" r="48" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="6" />
           <circle
-            cx="60" cy="60" r="52"
+            cx="60" cy="60" r="48"
             fill="none"
             stroke={color}
-            strokeWidth="6"
-            strokeDasharray={`${pct * 326.7} 326.7`}
+            strokeWidth="5"
             strokeLinecap="round"
-            style={{ transition: 'stroke-dasharray 1s linear, stroke 0.3s' }}
+            strokeDasharray={circumference}
+            strokeDashoffset={dashOffset}
+            style={{
+              transition: 'stroke-dashoffset 1s linear, stroke 0.5s ease',
+              filter: `drop-shadow(0 0 8px ${glowColor})`,
+            }}
           />
         </svg>
-        <span
+
+        <motion.span
+          key={timeLeft}
+          initial={{ scale: 1.2 }}
+          animate={{ scale: 1 }}
           className="font-orbitron text-3xl font-bold z-10"
           style={{ color, transition: 'color 0.3s' }}
         >
           {timeLeft}
-        </span>
+        </motion.span>
       </div>
-      <p className="font-orbitron text-[10px] text-text-muted tracking-widest mt-3">SECONDS TO DECIDE</p>
+
+      <p
+        className="font-orbitron text-[10px] tracking-[0.15em] mt-3"
+        style={{ color: timeLeft <= 8 ? '#FF3B5C' : '#8899AA', transition: 'color 0.5s' }}
+      >
+        {timeLeft <= 8 ? 'HURRY UP!' : 'SECONDS TO DECIDE'}
+      </p>
     </div>
   );
 }

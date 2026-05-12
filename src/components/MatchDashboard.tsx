@@ -1,175 +1,311 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useMatchStore } from '../store/matchStore';
 import { getOverAnalysis } from '../services/claudeApi';
 import { generateFieldPlacements } from '../data/fieldGenerator';
+import { fetchLiveScores } from '../services/liveMatchApi';
+import { getPhaseAccent } from '../utils/phaseColors';
 import Ground from './Ground';
 import Scoreboard from './Scoreboard';
 import BowlerSelect from './BowlerSelect';
 import Timer from './Timer';
 import OverResult from './OverResult';
-import type { AnalysisResult as AnalysisResultType } from '../types';
+import type { AnalysisResult } from '../types';
 
 export default function MatchDashboard() {
   const {
     currentOverIndex,
     fanPlacements,
     selectedBowler,
-    selectedCaptain,
     phase,
-    liveCounter,
-    setLiveCounter,
     submitPrediction,
     revealResult,
     liveOvers,
     matchTitle,
-    dataSource,
     matchContext,
+    isSubmitting,
   } = useMatchStore();
 
   const over = liveOvers[currentOverIndex];
   const [soundOn, setSoundOn] = useState(true);
-  const [fetching, setFetching] = useState(false);
+  const [liveScores, setLiveScores] = useState<Array<{ id: string; name: string; score: string; isIpl: boolean }>>([]);
 
+  const showOverlay = phase === 'result';
+
+  // Live scores polling
   useEffect(() => {
-    const interval = setInterval(() => {
-      setLiveCounter(liveCounter + Math.floor(Math.random() * 60) - 30);
-    }, 4000);
+    const fetch = async () => {
+      try {
+        const scores = await fetchLiveScores();
+        if (scores.length > 0) setLiveScores(scores as Array<{ id: string; name: string; score: string; isIpl: boolean }>);
+      } catch {
+        // Live scores unavailable
+      }
+    };
+    fetch();
+    const interval = setInterval(fetch, 30000);
     return () => clearInterval(interval);
-  }, [liveCounter, setLiveCounter]);
+  }, []);
 
-  // Auto-generate captain placements when revealing
-  const handleSubmit = async () => {
-    if (fanPlacements.length !== 9 || !selectedBowler || !over) return;
-    submitPrediction();
-    setFetching(true);
-
-    // Parse over result for context
-    const runsMatch = over.overResult.match(/(\d+)\s*runs/);
-    const overRuns = runsMatch ? parseInt(runsMatch[1], 10) : 8;
-
-    // Generate captain's placements for THIS over
-    const captainPlacements = generateFieldPlacements(
-      over.overNumber,
-      over.bowlerType,
-      over.strikerStats.strikeRate,
-      over.strikerStats.weaknesses,
-      overRuns,
-    );
-
-    // Pick captain's bowler from the options the actual match used
-    const captainBowler = over.actualBowler || selectedBowler;
-
-    const result: AnalysisResultType = await getOverAnalysis({
-      overNumber: over.overNumber,
-      matchSituation: over.matchSituation,
-      batsmanName: over.batsmanOnStrike,
-      strikerSR: over.strikerStats.strikeRate,
-      weakness: over.strikerStats.weaknesses,
-      pitchCondition: over.pitchCondition,
-      fanPlacements: [...fanPlacements],
-      fanBowler: selectedBowler,
-      fanBowlerType: over.bowlerOptions.find((b) => b.name === selectedBowler)?.type || '',
-      actualPlacements: captainPlacements,
-      actualBowler: captainBowler,
-      overResult: over.overResult,
-    });
-
-    setFetching(false);
-    revealResult(result);
-  };
-
-  const canSubmit = fanPlacements.length === 9 && selectedBowler !== null && phase === 'predict';
-
+  // Derive current score from actual over data
+  const currentScore = useMemo(() => over?.runningScore || { runs: 0, wickets: 0 }, [over?.runningScore]);
   const battingTeam = matchContext?.team1?.batting ? matchContext.team1 : matchContext?.team2;
+  const bowlingTeam = matchContext?.team1?.batting ? matchContext.team2 : matchContext?.team1;
+
+  const accent = over ? getPhaseAccent(over.overNumber) : null;
+  const totalOvers = liveOvers.length;
+
+  const canSubmit = fanPlacements.length === 9 && selectedBowler !== null && phase === 'predict' && !isSubmitting;
+
+  const handleSubmit = useCallback(async () => {
+    if (fanPlacements.length !== 9 || !selectedBowler || !over || isSubmitting) return;
+
+    console.log('Submitting state:', { fanPlacements, selectedBowler, overNumber: over.overNumber });
+
+    submitPrediction();
+
+    // Timeout recovery: if analysis takes > 15s, auto-continue
+    const timeoutId = setTimeout(() => {
+      console.log('Timeout recovery: forcing navigation');
+      const fallbackResult: AnalysisResult = {
+        fieldScore: 0, bowlingScore: 0, bonusPoints: 0, totalScore: 0,
+        matchedPositions: [], missedPositions: [],
+        commentary: 'Analysis timed out. Please continue.',
+        keyInsight: 'Time management is key in captaincy.',
+        grade: 'D',
+      };
+      revealResult(fallbackResult);
+    }, 15000);
+
+    try {
+      const runsMatch = over.overResult.match(/(\d+)\s*runs/);
+      const overRuns = runsMatch ? parseInt(runsMatch[1], 10) : 8;
+
+      const captainPlacements = generateFieldPlacements(
+        over.overNumber, over.bowlerType, over.strikerStats.strikeRate,
+        over.strikerStats.weaknesses, overRuns,
+      );
+
+      const captainBowler = over.actualBowler || selectedBowler;
+
+      const result = await getOverAnalysis({
+        overNumber: over.overNumber,
+        matchSituation: over.matchSituation,
+        batsmanName: over.batsmanOnStrike,
+        strikerSR: over.strikerStats.strikeRate,
+        weakness: over.strikerStats.weaknesses,
+        pitchCondition: over.pitchCondition,
+        fanPlacements: [...fanPlacements],
+        fanBowler: selectedBowler,
+        fanBowlerType: over.bowlerOptions.find((b) => b.name === selectedBowler)?.type || '',
+        actualPlacements: captainPlacements,
+        actualBowler: captainBowler,
+        overResult: over.overResult,
+      });
+
+      clearTimeout(timeoutId);
+      console.log('Navigation success');
+      console.log('Updated innings:', currentScore);
+      revealResult(result);
+    } catch (err) {
+      clearTimeout(timeoutId);
+      console.error('Submit error:', err);
+      const errorResult: AnalysisResult = {
+        fieldScore: 0, bowlingScore: 0, bonusPoints: 0, totalScore: 0,
+        matchedPositions: [], missedPositions: [],
+        commentary: 'An error occurred during analysis.',
+        keyInsight: 'Technical difficulties. Your submission was recorded.',
+        grade: 'D',
+      };
+      revealResult(errorResult);
+    }
+  }, [fanPlacements, selectedBowler, over, isSubmitting, submitPrediction, revealResult, currentScore]);
 
   if (!over) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-bg-primary">
-        <p className="font-outfit text-text-muted">No match data loaded.</p>
+        <div className="text-center">
+          <div className="flex justify-center gap-2 mb-4">
+            <span className="w-2 h-2 bg-accent-green rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+            <span className="w-2 h-2 bg-accent-green rounded-full animate-bounce" style={{ animationDelay: '200ms' }} />
+            <span className="w-2 h-2 bg-accent-green rounded-full animate-bounce" style={{ animationDelay: '400ms' }} />
+          </div>
+          <p className="font-outfit text-text-muted text-sm">Loading match data...</p>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-bg-primary">
-      {phase === 'result' && <OverResult />}
+      {/* OverResult overlay modal */}
+      {showOverlay && phase === 'result' && <OverResult />}
+
+      {/* Live Score Ticker */}
+      {liveScores.length > 0 && (
+        <div className="bg-accent-red/[0.03] border-b border-accent-red/[0.06] overflow-hidden">
+          <div className="max-w-7xl mx-auto px-4 py-1 flex gap-6 text-[10px] font-outfit text-white animate-scroll-ticker whitespace-nowrap">
+            {liveScores.map((s, i) => (
+              <span key={s.id || i} className="flex-shrink-0">
+                {s.isIpl && <span className="text-accent-cyan mr-1 font-orbitron text-[9px]">IPL</span>}
+                <span className="font-semibold">{s.name}</span>
+                <span className="text-accent-green ml-1">{s.score}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Top Bar */}
-      <div className="sticky top-0 z-40 bg-bg-primary/90 backdrop-blur-md border-b border-white/10">
-        <div className="max-w-7xl mx-auto px-4 py-2 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="font-orbitron text-sm font-bold text-accent-green">TactIQ</span>
-            {dataSource === 'live' && (
-              <span className="text-[10px] px-1.5 py-0.5 bg-accent-green/20 text-accent-green rounded font-orbitron">LIVE</span>
-            )}
+      <div className="sticky top-0 z-30 bg-bg-primary/80 backdrop-blur-xl border-b border-white/[0.04]">
+        <div className="max-w-7xl mx-auto px-4 py-2.5 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="font-orbitron text-sm font-bold">
+              <span className="text-white">Tact</span><span className="text-accent-green">IQ</span>
+            </span>
+            <span className="text-[9px] px-1.5 py-0.5 bg-accent-green/15 text-accent-green rounded font-orbitron border border-accent-green/20">
+              LIVE
+            </span>
           </div>
           <div className="flex items-center gap-2 text-xs font-outfit text-white">
-            <span>🔴</span>
-            <span className="font-semibold">{matchTitle || 'Match'}</span>
-            {dataSource === 'demo' && (
-              <span className="text-text-muted text-[10px]">(Demo)</span>
-            )}
+            <span className="w-1.5 h-1.5 bg-accent-red rounded-full animate-pulse" />
+            <span className="font-semibold text-[11px]">{matchTitle || 'Match'}</span>
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-xs font-outfit text-text-muted">👥 {liveCounter.toLocaleString()} coaching</span>
-            <button onClick={() => setSoundOn(!soundOn)} className="text-sm text-text-muted hover:text-white transition-colors">
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gradient-to-r from-accent-gold/10 to-accent-gold/5 border border-accent-gold/20">
+              <span className="text-[11px]">👑</span>
+              <span className="font-orbitron text-[9px] text-accent-gold font-bold tracking-wide">PAT CUMMINS</span>
+            </div>
+            <div className="flex items-center gap-1 text-[11px] text-text-muted font-outfit">
+              <span className="text-accent-green">●</span>
+              <span className="tabular-nums">{useMatchStore.getState().liveCounter.toLocaleString()}</span>
+            </div>
+            <button onClick={() => setSoundOn(!soundOn)} className="text-xs text-text-muted hover:text-white transition-colors">
               {soundOn ? '🔊' : '🔇'}
             </button>
           </div>
         </div>
       </div>
 
-      {/* Team Bar */}
+      {/* Over Timeline Strip */}
+      <div className="bg-bg-surface/50 border-b border-white/[0.03] px-4 py-2.5">
+        <div className="max-w-7xl mx-auto flex items-center gap-1">
+          {Array.from({ length: totalOvers }, (_, i) => {
+            const ov = i + 1;
+            const ac = getPhaseAccent(ov);
+            const isComplete = i < currentOverIndex;
+            const isCurrent = i === currentOverIndex;
+            const dotColor = ov <= 6 ? 'bg-accent-green' : ov <= 15 ? 'bg-accent-cyan' : 'bg-accent-orange';
+            return (
+              <div key={ov} className="relative flex-1 flex flex-col items-center">
+                <div
+                  className={`w-full h-1 rounded-full transition-all duration-300 ${
+                    isComplete ? dotColor + ' opacity-70' :
+                    isCurrent ? dotColor + ' opacity-100 shadow-[0_0_6px_rgba(0,255,157,0.4)]' :
+                    'bg-white/[0.06]'
+                  }`}
+                />
+                {isCurrent && (
+                  <span className={`absolute -top-4 font-orbitron text-[8px] ${ac?.text || 'text-white'} font-bold`}>
+                    {ov}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+          <span className="ml-2 font-orbitron text-[8px] text-text-dim tracking-wider">{totalOvers} OV</span>
+        </div>
+      </div>
+
+      {/* Team Score Bar — now uses actual over data */}
       {matchContext && (
-        <div className="bg-bg-card border-b border-white/5">
-          <div className="max-w-7xl mx-auto px-4 py-2 flex items-center justify-between text-xs">
+        <div className="bg-gradient-to-r from-bg-surface via-bg-surface/80 to-bg-surface border-b border-white/[0.03]">
+          <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <span className="font-orbitron font-bold text-white">{matchContext.team1.short}</span>
-              <span className="font-orbitron text-accent-green">{matchContext.team1.score.runs}/{matchContext.team1.score.wickets}</span>
-              <span className="text-text-muted">Captain: <span className="text-accent-gold">{matchContext.team1.captain}</span></span>
+              <div className="text-right">
+                <div className="font-orbitron text-base sm:text-lg font-bold text-white tracking-tight">{matchContext.team1.short}</div>
+                <div className="font-outfit text-[8px] text-text-muted">{matchContext.team1.captain}</div>
+              </div>
+              <div className="flex items-baseline">
+                <span className="font-orbitron text-2xl sm:text-3xl font-black text-accent-green tabular-nums">
+                  {currentScore.runs}
+                </span>
+                <span className="font-orbitron text-lg text-text-muted mx-0.5">/</span>
+                <span className="font-orbitron text-xl sm:text-2xl font-bold text-text-muted tabular-nums">
+                  {currentScore.wickets}
+                </span>
+              </div>
             </div>
-            <span className="font-orbitron text-accent-blue text-sm">vs</span>
+            <div className="flex flex-col items-center">
+              <span className="font-orbitron text-[9px] text-text-muted tracking-[0.15em]">
+                {currentOverIndex > 0 ? `OVER ${currentOverIndex}.0` : 'OVER 0.0'}
+              </span>
+              {accent && (
+                <span className={`font-orbitron text-[8px] ${accent.text} tracking-[0.15em] mt-0.5`}>
+                  {accent.label}
+                </span>
+              )}
+            </div>
             <div className="flex items-center gap-3">
-              <span className="font-orbitron font-bold text-white">{matchContext.team2.short}</span>
-              <span className="font-orbitron text-accent-green">{matchContext.team2.score.runs}/{matchContext.team2.score.wickets}</span>
-              <span className="text-text-muted">Captain: <span className="text-accent-gold">{matchContext.team2.captain}</span></span>
+              <div className="flex items-baseline">
+                <span className="font-orbitron text-2xl sm:text-3xl font-black text-accent-red tabular-nums">
+                  {bowlingTeam?.score?.runs || 0}
+                </span>
+                <span className="font-orbitron text-lg text-text-muted mx-0.5">/</span>
+                <span className="font-orbitron text-xl sm:text-2xl font-bold text-text-muted tabular-nums">
+                  {bowlingTeam?.score?.wickets || 0}
+                </span>
+              </div>
+              <div className="text-left">
+                <div className="font-orbitron text-base sm:text-lg font-bold text-white tracking-tight">{matchContext.team2.short}</div>
+                <div className="font-outfit text-[8px] text-text-muted">{matchContext.team2.captain}</div>
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Predict Header */}
-      {phase === 'predict' && (
-        <div className="max-w-7xl mx-auto px-4 py-3">
-          <div className="bg-accent-green/10 border border-accent-green/30 rounded-xl p-3 text-center">
-            <p className="font-orbitron text-xs text-accent-green tracking-wider">
-              ⏳ PREDICT OVER {over.overNumber} — What would you do as captain?
-            </p>
+      {/* Phase Predict Header */}
+      {phase === 'predict' && accent && (
+        <div className="max-w-7xl mx-auto px-4 pt-3 pb-1">
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className={`${accent.bg} ${accent.border} border rounded-xl p-3 text-center`}
+            style={{ boxShadow: `0 0 20px ${accent.glow || 'transparent'}` }}
+          >
+            <div className="flex items-center justify-center gap-2">
+              <span className={`font-orbitron text-[11px] ${accent.text} tracking-wider`}>⏳ {accent.label}</span>
+              <span className="font-orbitron text-[11px] text-white font-bold">OVER {over.overNumber}</span>
+            </div>
             <p className="font-outfit text-[10px] text-text-muted mt-1">
-              Set your field and choose your bowler before the over starts
+              Set field + pick bowler — what would <span className="text-accent-gold font-semibold">Pat Cummins</span> do?
             </p>
-          </div>
+          </motion.div>
         </div>
       )}
 
       {/* Main 3-column layout */}
-      <div className="max-w-7xl mx-auto px-4 py-4 grid grid-cols-1 md:grid-cols-[28%_44%_28%] gap-4">
+      <div className="max-w-7xl mx-auto px-4 py-4 grid grid-cols-1 lg:grid-cols-[280px_1fr_280px] gap-4">
         {/* Left column */}
         <motion.div
           key={`left-${currentOverIndex}`}
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
-          className="space-y-4 overflow-y-auto max-h-[calc(100vh-80px)]"
+          transition={{ duration: 0.3 }}
+          className="space-y-4"
         >
-          <Scoreboard over={over} />
+          <Scoreboard over={over} battingTeamName={battingTeam?.name} />
 
-          {/* Team playing XI (compact) */}
-          <div className="bg-bg-card border border-white/10 rounded-xl p-3">
-            <div className="text-[10px] font-orbitron text-text-muted tracking-wider mb-1">BATTING XI</div>
+          {/* Batting XI */}
+          <div className="glass-panel p-3">
+            <div className="text-[9px] font-orbitron text-text-muted tracking-wider mb-2 flex items-center gap-2">
+              <span className="w-1 h-1 rounded-full bg-accent-green" />
+              SQUAD
+            </div>
             <div className="flex flex-wrap gap-1">
-              {battingTeam?.players?.slice(0, 6).map((p) => (
-                <span key={p} className="text-[10px] px-2 py-0.5 bg-white/5 rounded text-text-muted font-outfit">{p}</span>
+              {battingTeam?.players?.slice(0, 11).map((p) => (
+                <span key={p} className="text-[9px] px-2 py-0.5 bg-white/[0.04] rounded text-text-muted font-outfit">{p}</span>
               ))}
             </div>
           </div>
@@ -180,18 +316,29 @@ export default function MatchDashboard() {
           key={`center-${currentOverIndex}`}
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
           className="flex flex-col items-center"
         >
-          <Ground overNumber={over.overNumber} />
+          {/* Ground */}
+          <div
+            className={`rounded-2xl p-1 border ${accent?.border || 'border-white/[0.06]'}`}
+            style={{ boxShadow: accent ? `0 0 25px ${accent.glow || 'transparent'}` : 'none' }}
+          >
+            <Ground overNumber={over.overNumber} />
+          </div>
 
+          {/* Field counter */}
           <div className="flex items-center gap-4 mt-3">
-            <span className="font-orbitron text-sm text-accent-green">
-              Fielders Placed: {fanPlacements.length} / 9
-            </span>
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-accent-green" />
+              <span className="font-orbitron text-xs text-white/80 tabular-nums">
+                {fanPlacements.length}/9
+              </span>
+            </div>
             {phase === 'predict' && fanPlacements.length > 0 && (
               <button
                 onClick={() => useMatchStore.getState().clearFielders()}
-                className="text-xs font-outfit text-text-muted hover:text-white transition-colors underline"
+                className="text-[10px] font-outfit text-text-muted hover:text-white transition-colors underline underline-offset-2"
               >
                 Clear All
               </button>
@@ -204,75 +351,60 @@ export default function MatchDashboard() {
           key={`right-${currentOverIndex}`}
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.3 }}
           className="space-y-4"
         >
-          <Timer />
+          <Timer key={`timer-${currentOverIndex}-${phase}`} />
 
-          {/* Captain selector */}
-          {phase === 'predict' && matchContext && (
-            <div className="bg-bg-card border border-white/10 rounded-xl p-3">
-              <div className="text-[10px] font-orbitron text-text-muted tracking-wider mb-2">YOUR CAPTAIN PICK</div>
-              <div className="flex gap-2">
-                <motion.button
-                  whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
-                  onClick={() => useMatchStore.getState().selectCaptain(matchContext.team1.captain)}
-                  className={`flex-1 py-2 rounded-lg text-xs font-orbitron border transition-all ${
-                    selectedCaptain === matchContext.team1.captain
-                      ? 'bg-accent-green/20 border-accent-green text-accent-green'
-                      : 'bg-white/5 border-white/10 text-text-muted hover:border-white/30'
-                  }`}
-                >
-                  {matchContext.team1.short}<br/>{matchContext.team1.captain.split(' ').pop()}
-                </motion.button>
-                <motion.button
-                  whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
-                  onClick={() => useMatchStore.getState().selectCaptain(matchContext.team2.captain)}
-                  className={`flex-1 py-2 rounded-lg text-xs font-orbitron border transition-all ${
-                    selectedCaptain === matchContext.team2.captain
-                      ? 'bg-accent-green/20 border-accent-green text-accent-green'
-                      : 'bg-white/5 border-white/10 text-text-muted hover:border-white/30'
-                  }`}
-                >
-                  {matchContext.team2.short}<br/>{matchContext.team2.captain.split(' ').pop()}
-                </motion.button>
+          {/* Submitted state */}
+          {phase === 'submitted' && (
+            <div className="glass-panel p-5 text-center">
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                className="w-12 h-12 rounded-full bg-accent-green/20 border border-accent-green/30 mx-auto mb-3 flex items-center justify-center"
+              >
+                <span className="text-accent-green text-xl font-bold">✓</span>
+              </motion.div>
+              <p className="font-orbitron text-sm text-accent-green tracking-wider">PREDICTION IN</p>
+              <p className="text-[10px] text-text-muted font-outfit mt-2">
+                <span className="text-accent-gold">Pat Cummins</span> is analysing...
+              </p>
+              <div className="flex items-center justify-center gap-1 mt-3">
+                <span className="w-1.5 h-1.5 bg-accent-green rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                <span className="w-1.5 h-1.5 bg-accent-green rounded-full animate-bounce" style={{ animationDelay: '200ms' }} />
+                <span className="w-1.5 h-1.5 bg-accent-green rounded-full animate-bounce" style={{ animationDelay: '400ms' }} />
               </div>
             </div>
           )}
 
-          {phase === 'submitted' && (
-            <div className="bg-bg-card border border-accent-green/30 rounded-xl p-4 text-center">
-              <div className="text-2xl mb-2">✓</div>
-              <p className="font-orbitron text-sm text-accent-green">PREDICTION SUBMITTED</p>
-              {fetching && (
-                <div className="mt-3">
-                  <p className="text-xs text-text-muted font-outfit mb-2">Captain {selectedCaptain || matchContext?.team1.captain} is setting the field...</p>
-                  <div className="flex items-center justify-center gap-1">
-                    <span className="w-1.5 h-1.5 bg-accent-green rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                    <span className="w-1.5 h-1.5 bg-accent-green rounded-full animate-bounce" style={{ animationDelay: '200ms' }} />
-                    <span className="w-1.5 h-1.5 bg-accent-green rounded-full animate-bounce" style={{ animationDelay: '400ms' }} />
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
+          {/* Bowler selection */}
           {phase === 'predict' && (
             <BowlerSelect options={over.bowlerOptions} />
           )}
 
+          {/* Submit button */}
           {phase === 'predict' && (
             <motion.button
-              whileHover={canSubmit ? { scale: 1.02 } : {}}
-              whileTap={canSubmit ? { scale: 0.98 } : {}}
+              whileHover={canSubmit ? { scale: 1.01 } : {}}
+              whileTap={canSubmit ? { scale: 0.99 } : {}}
               onClick={handleSubmit}
-              disabled={!canSubmit}
-              className={`w-full py-4 rounded-xl font-orbitron font-bold text-sm tracking-wider transition-all ${
+              disabled={!canSubmit || isSubmitting}
+              className={`w-full py-4 rounded-xl font-orbitron font-bold text-sm tracking-[0.1em] transition-all duration-300 ${
                 canSubmit
-                  ? 'bg-accent-green text-black hover:bg-accent-green/90 shadow-lg shadow-accent-green/20'
-                  : 'bg-white/5 text-text-muted border border-white/10 cursor-not-allowed'
+                  ? `${accent?.bg || 'bg-accent-green/10'} ${accent?.text || 'text-accent-green'} ${accent?.border || 'border-accent-green/30'} border hover:brightness-110`
+                  : 'bg-white/[0.02] text-text-dim border border-white/[0.06] cursor-not-allowed'
               }`}
             >
-              {canSubmit ? 'SUBMIT YOUR TACTICS' : 'PLACE 9 + PICK BOWLER'}
+              {canSubmit
+                ? `SUBMIT OVER ${over.overNumber} TACTICS`
+                : isSubmitting
+                  ? 'SUBMITTING...'
+                  : fanPlacements.length < 9
+                    ? `PLACE ${9 - fanPlacements.length} MORE FIELDERS`
+                    : !selectedBowler
+                      ? 'SELECT A BOWLER'
+                      : 'PLACE 9 + PICK BOWLER'}
             </motion.button>
           )}
         </motion.div>

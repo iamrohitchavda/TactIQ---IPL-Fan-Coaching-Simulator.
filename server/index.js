@@ -4,9 +4,9 @@ import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
-dotenv.config();
-
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+dotenv.config({ path: join(__dirname, '.env') });
 const app = express();
 const PORT = process.env.PORT || 3001;
 const API_KEY = process.env.CRICAPI_KEY || '';
@@ -29,34 +29,38 @@ async function proxy(endpoint, res) {
   }
 }
 
-app.get('/api/currentMatches', (req, res) => {
+function asyncRoute(fn) {
+  return (req, res, next) => fn(req, res).catch(next);
+}
+
+app.get('/api/currentMatches', asyncRoute(async (req, res) => {
   const offset = req.query.offset || 0;
-  proxy(`/currentMatches?offset=${offset}`, res);
-});
+  await proxy(`/currentMatches?offset=${offset}`, res);
+}));
 
-app.get('/api/matchScorecard', (req, res) => {
+app.get('/api/matchScorecard', asyncRoute(async (req, res) => {
   const id = req.query.id;
   if (!id) return res.status(400).json({ error: 'Missing match id' });
-  proxy(`/match_scorecard?id=${id}`, res);
-});
+  await proxy(`/match_scorecard?id=${id}`, res);
+}));
 
-app.get('/api/matchInfo', (req, res) => {
+app.get('/api/matchInfo', asyncRoute(async (req, res) => {
   const id = req.query.id;
   if (!id) return res.status(400).json({ error: 'Missing match id' });
-  proxy(`/match_info?id=${id}`, res);
-});
+  await proxy(`/match_info?id=${id}`, res);
+}));
 
-app.get('/api/players', (req, res) => {
+app.get('/api/players', asyncRoute(async (req, res) => {
   const search = req.query.search;
   if (!search) return res.status(400).json({ error: 'Missing search term' });
-  proxy(`/players?search=${encodeURIComponent(search)}`, res);
-});
+  await proxy(`/players?search=${encodeURIComponent(search)}`, res);
+}));
 
-app.get('/api/playerStats', (req, res) => {
+app.get('/api/playerStats', asyncRoute(async (req, res) => {
   const id = req.query.id;
   if (!id) return res.status(400).json({ error: 'Missing player id' });
-  proxy(`/player_stats?id=${id}`, res);
-});
+  await proxy(`/player_stats?id=${id}`, res);
+}));
 
 app.get('/api/espn-rss', async (req, res) => {
   try {
@@ -67,6 +71,11 @@ app.get('/api/espn-rss', async (req, res) => {
   } catch (err) {
     res.status(502).json({ error: 'ESPN RSS fetch failed' });
   }
+});
+
+app.use((err, _req, res, _next) => {
+  console.error('Server error:', err.message);
+  res.status(500).json({ error: 'Internal server error', detail: err.message });
 });
 
 app.listen(PORT, () => {

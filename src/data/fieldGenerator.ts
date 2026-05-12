@@ -157,7 +157,7 @@ export function generateBowlerOptions(
   bowlers: { name: string; type: string; economy?: number; wickets?: number }[],
   overNumber: number
 ): { name: string; type: string; economy: number; wickets: number; recentCosts: number[] }[] {
-  const shuffled = [...bowlers].sort((a, _b) => seededRandom(overNumber * 13 + a.name.length) - 0.5);
+  const shuffled = [...bowlers].sort((a) => seededRandom(overNumber * 13 + a.name.length) - 0.5);
   const selected = shuffled.slice(0, 3);
 
   return selected.map((b) => ({
