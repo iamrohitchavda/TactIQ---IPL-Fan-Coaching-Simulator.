@@ -24,6 +24,7 @@ export default function MatchDashboard() {
     matchTitle,
     matchContext,
     isSubmitting,
+    overScores,
   } = useMatchStore();
 
   const over = liveOvers[currentOverIndex];
@@ -167,16 +168,23 @@ export default function MatchDashboard() {
               LIVE
             </span>
           </div>
-          <div className="flex items-center gap-2 text-xs font-outfit text-white">
-            <span className="w-1.5 h-1.5 bg-accent-red rounded-full animate-pulse" />
-            <span className="font-semibold text-[11px]">{matchTitle || 'Match'}</span>
+          <div className="flex items-center gap-3 text-sm font-orbitron text-white font-bold">
+            <span className="w-2 h-2 bg-accent-red rounded-full animate-pulse flex-shrink-0" />
+            <span className="text-sm sm:text-base tracking-tight">{matchTitle || 'Match'}</span>
           </div>
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gradient-to-r from-accent-gold/10 to-accent-gold/5 border border-accent-gold/20">
-              <span className="text-[11px]">👑</span>
-              <span className="font-orbitron text-[9px] text-accent-gold font-bold tracking-wide">PAT CUMMINS</span>
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gradient-to-r from-accent-gold/15 to-accent-gold/5 border border-accent-gold/30">
+              <span className="text-sm">👑</span>
+              <span className="font-orbitron text-xs sm:text-sm text-accent-gold font-bold tracking-wide">PAT CUMMINS</span>
             </div>
-            <div className="flex items-center gap-1 text-[11px] text-text-muted font-outfit">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-accent-green/15 border border-accent-green/30">
+              <span className="text-[10px] font-outfit text-text-muted font-semibold">You</span>
+              <span className="font-orbitron text-base sm:text-lg font-black text-accent-green tabular-nums">
+                {overScores.reduce((sum, s) => sum + s.totalScore, 0)}
+              </span>
+              <span className="text-[9px] text-text-dim font-orbitron">/ {overScores.length * 100 || 0}</span>
+            </div>
+            <div className="flex items-center gap-1 text-xs text-text-muted font-outfit">
               <span className="text-accent-green">●</span>
               <span className="tabular-nums">{useMatchStore.getState().liveCounter.toLocaleString()}</span>
             </div>
@@ -241,7 +249,7 @@ export default function MatchDashboard() {
                 {currentOverIndex > 0 ? `OVER ${currentOverIndex}.0` : 'OVER 0.0'}
               </span>
               {accent && (
-                <span className={`font-orbitron text-[8px] ${accent.text} tracking-[0.15em] mt-0.5`}>
+                <span className={`font-orbitron text-[8px] ${accent.text} tracking-[0.15em]`}>
                   {accent.label}
                 </span>
               )}
