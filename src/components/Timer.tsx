@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { useMatchStore } from '../store/matchStore';
 
 export default function Timer() {
-  const { phase, submitPrediction } = useMatchStore();
+  const phase = useMatchStore((s) => s.phase);
   const [timeLeft, setTimeLeft] = useState(30);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -20,7 +20,13 @@ export default function Timer() {
       setTimeLeft((prev) => {
         if (prev <= 1) {
           if (intervalRef.current) clearInterval(intervalRef.current);
-          submitPrediction();
+          const store = useMatchStore.getState();
+          const hasValid = store.fanPlacements.length === 9 && store.selectedBowler !== null;
+          if (hasValid) {
+            store.submitPrediction();
+          } else {
+            store.timeoutSubmit();
+          }
           return 0;
         }
         return prev - 1;
@@ -30,7 +36,7 @@ export default function Timer() {
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [phase, submitPrediction]);
+  }, [phase]);
 
   const pct = timeLeft / 30;
   const circumference = 2 * Math.PI * 48;

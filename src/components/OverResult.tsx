@@ -13,6 +13,7 @@ const gradeColors: Record<string, string> = {
   B: 'text-accent-cyan bg-accent-cyan/15 border-accent-cyan/30',
   C: 'text-accent-orange bg-accent-orange/15 border-accent-orange/30',
   D: 'text-accent-red bg-accent-red/15 border-accent-red/30',
+  F: 'text-accent-red bg-accent-red/20 border-accent-red/40',
 };
 
 export default function OverResult() {

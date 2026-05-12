@@ -27,6 +27,7 @@ interface MatchState {
   selectBowler: (name: string) => void;
   selectCaptain: (name: string) => void;
   submitPrediction: () => void;
+  timeoutSubmit: () => void;
   revealResult: (result: AnalysisResult) => void;
   nextOver: () => void;
   setPhase: (phase: Phase) => void;
@@ -87,6 +88,29 @@ export const useMatchStore = create<MatchState>((set) => ({
     set({ selectedCaptain: name }),
 
   submitPrediction: () => set({ phase: 'submitted', isSubmitting: true, submissionError: null }),
+
+  timeoutSubmit: () =>
+    set((state) => {
+      const over = state.liveOvers[state.currentOverIndex];
+      const missedResult: AnalysisResult = {
+        fieldScore: 0,
+        bowlingScore: 0,
+        bonusPoints: 0,
+        totalScore: 0,
+        matchedPositions: [],
+        missedPositions: over?.actualFieldPlacements || [],
+        commentary: 'You missed the submission window! The captain set the field without your input.',
+        keyInsight: 'Time management is crucial in cricket captaincy. Plan your tactics faster next over.',
+        grade: 'F',
+      };
+      return {
+        phase: 'result',
+        overScores: [...state.overScores, missedResult],
+        showResult: true,
+        isSubmitting: false,
+        submissionError: null,
+      };
+    }),
 
   revealResult: (result) =>
     set((state) => {
