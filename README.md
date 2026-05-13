@@ -1,87 +1,117 @@
-# TactIQ — IPL Fan Coaching Simulator
+# 🏏 TactIQ — Be the Captain. Outsmart the Game.
 
-Be the captain. Outsmart the game.
+TactIQ is a real-time IPL cricket strategy game where **you** set the field and pick the bowler before every over — competing against the captain's actual decisions.
 
-A single-page web application where fans act as the captain each over, placing fielders and choosing the bowler. After the over, their decisions are scored against the actual captain's move using the Claude Anthropic API.
+---
 
-## Tech Stack
+## 🎙️ Signature Feature: Live AI Voice Commentary
 
-- React 19 + Vite 6 + TypeScript
-- Tailwind CSS (dark stadium theme)
-- Framer Motion (animations)
-- Zustand (global match state)
-- Recharts (final summary radar chart)
-- Anthropic Claude API for scoring + tactical commentary
+> **TactIQ talks to you — no config, no API key, no downloads needed.**
 
-## Setup
+Every action in the game is narrated by a **Google UK English Female voice** using the browser's built-in Web Speech API:
 
-1. Install dependencies:
-   ```
-   npm install
-   ```
+| Trigger | Voice Says |
+|---|---|
+| Over starts | *"You have 30 seconds! Place your fielders and select your bowler."* |
+| You place a fielder | *Speaks the position name (e.g. "Mid On", "Deep Square Leg")* |
+| You pick a bowler | *"[Bowler name] selected"* |
+| Countdown (last 10s) | *"10… 9… 8… 7…"* with increasing urgency |
+| Time's up | *"Time's up!"* |
+| Next over in 3s | *"Moving to the next over!"* |
 
-2. Create environment file:
-   ```
-   cp .env.example .env
-   ```
+Toggle the **🔊 / 🔇** button in the top bar to mute/unmute at any time. Muting cancels any ongoing speech immediately.
 
-3. Add your Anthropic API key to `.env`:
-   ```
-   VITE_ANTHROPIC_API_KEY=sk-ant-...
-   ```
+> Works best in **Chrome** (uses Google UK English Female voice). Firefox/Safari fall back to their default English voice.
 
-4. Start the dev server:
-   ```
-   npm run dev
-   ```
+---
 
-5. Open http://localhost:5173
+## 🚀 Running Locally — 3 Steps
 
-## Features
+```bash
+# 1. Install dependencies
+npm install
 
-- **Lobby** — Immersive hero with rotating cricket ball, live fan counter, animated crowd bars
-- **Login** — Quick email/username entry, persisted to localStorage
-- **3-Column Match Dashboard** — Scoreboard, SVG cricket ground (26 field positions), timer, bowler selection, submit tactics
-- **SVG Cricket Ground** — Full interactive field with 26 fixed position slots, click to place/remove numbered tokens (9 required)
-- **30-Second Timer** — Conic-gradient countdown with auto-submit, color transitions (green → orange → red)
-- **Captain Deciding Phase** — 8-second dramatic wait with IPL facts, live fan submit counter, progress bar
-- **Over Result Modal** — Ground comparison (fan green vs captain orange, matched gold), ball-by-ball reveal, scored breakdown (field/bowling/bonus), AI analysis with word-by-word reveal, confetti (80+), leaderboard snapshot
-- **Match Summary** — Total score, best over, grade, radar chart, over timeline with click-to-expand details, share card, play again
-- **Immersive Details** — Live fan counter (fluctuating), sound FX via Web Audio API, floodlight glow animations, starburst matched positions
+# 2. Start the dev server
+npm run dev
 
-## Project Structure
-
-```
-tactiq/
-├── index.html
-├── vite.config.ts
-├── tailwind.config.js
-├── postcss.config.js
-├── src/
-│   ├── App.tsx                ← phase-based screen rendering
-│   ├── main.tsx
-│   ├── index.css              ← CSS variables + base styles
-│   ├── types/index.ts         ← TypeScript interfaces
-│   ├── data/matchData.ts      ← 20-over match data + field positions
-│   ├── store/matchStore.ts    ← Zustand state management
-│   ├── services/claudeApi.ts  ← Claude API + fallback scoring
-│   └── components/
-│       ├── Lobby.tsx
-│       ├── Login.tsx
-│       ├── MatchDashboard.tsx
-│       ├── Ground.tsx         ← SVG cricket ground
-│       ├── Scoreboard.tsx
-│       ├── BowlerSelect.tsx
-│       ├── Timer.tsx
-│       ├── OverResult.tsx
-│       ├── Leaderboard.tsx
-│       └── MatchSummary.tsx
+# 3. Open in browser
+# → http://localhost:5173
 ```
 
-## API Key Free Mode
+**That's it.** No API keys. No `.env` setup. No backend needed.
 
-The app works fully without an API key using a built-in fallback scoring algorithm. Add an API key for Claude-powered tactical analysis.
+---
 
-## License
+## 🎮 How to Play
 
-MIT
+1. **Enter as Coach** on the lobby screen
+2. A **random IPL match** is generated (different teams & stadium every session)
+3. Each over you have **30 seconds** to:
+   - Place **9 fielders** on the ground by tapping positions
+   - Select **1 bowler** from the options
+4. When you complete your selection, it **auto-submits** — no button needed
+5. See how your tactics compare to the captain's decisions
+6. After **10 seconds** of viewing your result, the next over starts automatically
+7. After 20 overs, view the **Final Leaderboard** and your match grade
+
+---
+
+## ⚡ Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Framework | React 18 + TypeScript |
+| Build | Vite |
+| Styling | Tailwind CSS |
+| Animation | Framer Motion |
+| State | Zustand |
+| Voice | Web Speech API (built into browser) |
+| Scoring | 100% local — no backend |
+
+---
+
+## 📁 Project Structure
+
+```
+src/
+├── components/
+│   ├── Lobby.tsx          # Landing screen + random match generator
+│   ├── MatchDashboard.tsx  # Main game screen (field + timer + bowler)
+│   ├── Ground.tsx         # Interactive cricket field SVG
+│   ├── Timer.tsx          # 30-second countdown with voice
+│   ├── BowlerSelect.tsx   # Bowler selection panel
+│   ├── OverResult.tsx     # Score reveal + 10s auto-next
+│   └── MatchSummary.tsx   # Final leaderboard + match report
+├── data/
+│   ├── matchGenerator.ts  # Random IPL match generator (all 10 teams)
+│   └── teamData.ts        # Real IPL 2026 squads & stadiums
+├── services/
+│   ├── audioFx.ts         # 🎙️ Voice FX engine (Web Speech API)
+│   └── claudeApi.ts       # Local scoring engine (no API needed)
+└── store/
+    └── matchStore.ts      # Global game state (Zustand)
+```
+
+---
+
+## 🏟️ Supported IPL Teams
+
+GT · SRH · MI · CSK · RCB · KKR · RR · DC · PBKS · LSG
+
+Every match randomly pairs 2 teams with their real bowlers, batsmen, and home stadium. Seed changes every minute — you'll never play the same match twice.
+
+---
+
+## 📦 Build for Production
+
+```bash
+npm run build
+# Output in dist/
+```
+
+---
+
+## 🔇 No External APIs Used
+
+All game logic, scoring, and match generation runs **entirely in your browser**.
+The `server/` folder contains an optional CricAPI proxy for a live score ticker — it is **not required** to play the game.
