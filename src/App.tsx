@@ -1,11 +1,11 @@
-import { AnimatePresence, motion } from 'framer-motion';
-import { useMatchStore } from './store/matchStore';
-import { ErrorBoundary } from './components/ErrorBoundary';
-import Lobby from './components/Lobby';
-import Login from './components/Login';
-import MatchSelector from './components/MatchSelector';
-import MatchDashboard from './components/MatchDashboard';
-import MatchSummary from './components/MatchSummary';
+import { AnimatePresence, motion, type Transition } from "framer-motion";
+import { useMatchStore } from "./store/matchStore";
+import { ErrorBoundary } from "./components/ErrorBoundary";
+import Lobby from "./components/Lobby";
+import Login from "./components/Login";
+import MatchSelector from "./components/MatchSelector";
+import MatchDashboard from "./components/MatchDashboard";
+import MatchSummary from "./components/MatchSummary";
 
 const pageVariants = {
   initial: { opacity: 0, y: 30, scale: 0.98 },
@@ -13,7 +13,7 @@ const pageVariants = {
   exit: { opacity: 0, y: -20, scale: 0.98 },
 };
 
-const pageTransition = { duration: 0.35, ease: [0.4, 0, 0.2, 1] as const };
+const pageTransition: Transition = { duration: 0.35, ease: [0.4, 0, 0.2, 1] };
 
 const pages: Record<string, React.ReactNode> = {
   lobby: <Lobby />,
@@ -23,8 +23,10 @@ const pages: Record<string, React.ReactNode> = {
 
 export default function App() {
   const { phase } = useMatchStore();
-  const isDashboard = ['predict', 'submitted', 'reveal', 'result'].includes(phase);
-  const showSummary = phase === 'summary';
+  const isDashboard = ["predict", "submitted", "reveal", "result"].includes(
+    phase,
+  );
+  const showSummary = phase === "summary";
 
   const pageContent = pages[phase] || null;
 
