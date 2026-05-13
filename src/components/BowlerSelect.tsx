@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { useMatchStore } from '../store/matchStore';
 import type { BowlerOption } from '../types';
+import { speak } from '../services/audioFx';
 
 interface BowlerSelectProps {
   options: BowlerOption[];
@@ -33,7 +34,10 @@ export default function BowlerSelect({ options }: BowlerSelectProps) {
               initial={{ opacity: 0, x: -15 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: idx * 0.08 }}
-              onClick={() => selectBowler(bowler.name)}
+              onClick={() => {
+                selectBowler(bowler.name);
+                speak(`${bowler.name} selected`, { rate: 1.0, pitch: 1.1 });
+              }}
               className={`relative p-3 rounded-xl border cursor-pointer transition-all duration-200 ${
                 selected
                   ? 'border-accent-green/40 bg-accent-green/8'

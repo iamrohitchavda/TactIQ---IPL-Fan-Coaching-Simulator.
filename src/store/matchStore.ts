@@ -20,6 +20,7 @@ interface MatchState {
   predictionHistory: AnalysisResult[];
   isSubmitting: boolean;
   submissionError: string | null;
+  soundEnabled: boolean;
 
   setUser: (user: User) => void;
   placeFielder: (position: string) => void;
@@ -37,6 +38,7 @@ interface MatchState {
   setSubmitting: (val: boolean) => void;
   setSubmissionError: (err: string | null) => void;
   updateScoresFromOvers: () => void;
+  toggleSound: () => void;
   reset: () => void;
 }
 
@@ -58,6 +60,7 @@ const initialState = {
   predictionHistory: [] as AnalysisResult[],
   isSubmitting: false,
   submissionError: null as string | null,
+  soundEnabled: true,
 };
 
 export const useMatchStore = create<MatchState>((set) => ({
@@ -92,20 +95,38 @@ export const useMatchStore = create<MatchState>((set) => ({
   timeoutSubmit: () =>
     set((state) => {
       const over = state.liveOvers[state.currentOverIndex];
-      const missedResult: AnalysisResult = {
-        fieldScore: 0,
-        bowlingScore: 0,
+      const placements = state.fanPlacements;
+      const bowler = state.selectedBowler || '';
+
+      // Score whatever the user selected (partial is fine — field score scales with matches)
+      const matched = placements.filter((p) => (over?.actualFieldPlacements || []).includes(p));
+      const fieldScore = Math.min(60, matched.length * 6 + (placements.length - matched.length) * 1);
+      const bowlerOptions = over?.bowlerOptions || [];
+      const selectedBowlerType = bowlerOptions.find((b) => b.name === bowler)?.type || '';
+      const actualBowler = over?.actualBowler || '';
+      const bowlingScore = bowler === actualBowler ? 40 : selectedBowlerType === over?.bowlerType ? 20 : placements.length > 0 ? 5 : 0;
+      const totalScore = fieldScore + bowlingScore;
+      const grade = totalScore >= 90 ? 'S' : totalScore >= 75 ? 'A' : totalScore >= 60 ? 'B' : totalScore >= 45 ? 'C' : totalScore > 0 ? 'D' : 'F';
+
+      const timeoutResult = {
+        fieldScore,
+        bowlingScore,
         bonusPoints: 0,
-        totalScore: 0,
-        matchedPositions: [],
-        missedPositions: over?.actualFieldPlacements || [],
-        commentary: 'You missed the submission window! The captain set the field without your input.',
-        keyInsight: 'Time management is crucial in cricket captaincy. Plan your tactics faster next over.',
-        grade: 'F',
+        totalScore,
+        matchedPositions: matched,
+        missedPositions: (over?.actualFieldPlacements || []).filter((p) => !placements.includes(p)),
+        commentary: placements.length === 0
+          ? 'You missed the submission window with no selections made. The captain set the field without your input.'
+          : `Time ran out! You placed ${placements.length}/9 fielders${bowler ? ' and selected a bowler' : ''}. Partial points awarded.`,
+        keyInsight: placements.length === 0
+          ? 'Time management is crucial in cricket captaincy. Plan your tactics faster next over.'
+          : 'Good effort! Next over, try to complete all selections before the clock runs down.',
+        grade,
       };
+
       return {
         phase: 'result',
-        overScores: [...state.overScores, missedResult],
+        overScores: [...state.overScores, timeoutResult],
         showResult: true,
         isSubmitting: false,
         submissionError: null,
@@ -209,5 +230,14 @@ export const useMatchStore = create<MatchState>((set) => ({
       };
     }),
 
-  reset: () => set({ ...initialState, liveCounter: 2341 }),
+  toggleSound: () => set((state) => {
+    const next = !state.soundEnabled;
+    // Cancel any ongoing speech immediately when muting
+    if (!next && typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    return { soundEnabled: next };
+  }),
+
+  reset: () => set((state) => ({ ...initialState, liveCounter: 2341, soundEnabled: state.soundEnabled })),
 }));

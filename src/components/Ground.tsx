@@ -1,5 +1,6 @@
 import { useMatchStore } from '../store/matchStore';
 import { fieldPositions } from '../data/matchData';
+import { speak } from '../services/audioFx';
 
 interface GroundProps {
   compact?: boolean;
@@ -136,7 +137,12 @@ export default function Ground({
           return (
             <g
               key={pos.name}
-              onClick={() => { if (canPlace) useMatchStore.getState().placeFielder(pos.name); }}
+              onClick={() => {
+                if (canPlace) {
+                  useMatchStore.getState().placeFielder(pos.name);
+                  speak(pos.name, { rate: 1.05, pitch: 1.0 });
+                }
+              }}
               style={{ cursor: canPlace ? 'pointer' : 'default' }}
             >
               <circle
@@ -162,7 +168,12 @@ export default function Ground({
           return (
             <g
               key={`placed-${pos.name}`}
-              onClick={() => { if (canPlace) useMatchStore.getState().placeFielder(pos.name); }}
+              onClick={() => {
+                if (canPlace) {
+                  useMatchStore.getState().placeFielder(pos.name);
+                  speak(pos.name, { rate: 1.05, pitch: 1.0 });
+                }
+              }}
               style={{ cursor: canPlace ? 'pointer' : 'default' }}
             >
               <circle cx={pos.x} cy={pos.y} r={compact ? 8 : 11} fill="#00FF9D" opacity={0.85} />

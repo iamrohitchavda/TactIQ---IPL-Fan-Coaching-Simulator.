@@ -25,10 +25,11 @@ export default function MatchDashboard() {
     matchContext,
     isSubmitting,
     overScores,
+    soundEnabled,
+    toggleSound,
   } = useMatchStore();
 
   const over = liveOvers[currentOverIndex];
-  const [soundOn, setSoundOn] = useState(true);
   const [liveScores, setLiveScores] = useState<Array<{ id: string; name: string; score: string; isIpl: boolean }>>([]);
 
   const showOverlay = phase === 'result';
@@ -122,6 +123,17 @@ export default function MatchDashboard() {
     }
   }, [fanPlacements, selectedBowler, over, isSubmitting, submitPrediction, revealResult, currentScore]);
 
+  // ─── Auto-submit when all selections are complete ────────────────────────────
+  useEffect(() => {
+    if (fanPlacements.length === 9 && selectedBowler !== null && phase === 'predict' && !isSubmitting) {
+      // Small delay so the user sees the last selection animate before submitting
+      const timer = setTimeout(() => {
+        handleSubmit();
+      }, 800);
+      return () => clearTimeout(timer);
+    }
+  }, [fanPlacements.length, selectedBowler, phase, isSubmitting, handleSubmit]);
+
   if (!over) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-bg-primary">
@@ -188,8 +200,12 @@ export default function MatchDashboard() {
               <span className="text-accent-green">●</span>
               <span className="tabular-nums">{useMatchStore.getState().liveCounter.toLocaleString()}</span>
             </div>
-            <button onClick={() => setSoundOn(!soundOn)} className="text-xs text-text-muted hover:text-white transition-colors">
-              {soundOn ? '🔊' : '🔇'}
+            <button
+              onClick={toggleSound}
+              title={soundEnabled ? 'Mute voice' : 'Unmute voice'}
+              className="text-lg hover:scale-110 transition-transform"
+            >
+              {soundEnabled ? '🔊' : '🔇'}
             </button>
           </div>
         </div>

@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useMatchStore } from '../store/matchStore';
 import { iplFacts } from '../data/matchData';
 import { getOverAnalysis } from '../services/claudeApi';
+import { speak } from '../services/audioFx';
 import Ground from './Ground';
 import Leaderboard from './Leaderboard';
 import type { AnalysisResult } from '../types';
@@ -40,9 +41,13 @@ export default function OverResult() {
   const [wordReveal, setWordReveal] = useState(0);
   const [displayScore, setDisplayScore] = useState(0);
   const [exitDone, setExitDone] = useState(false);
+  // 10-second auto-redirect countdown
+  const [nextOverCountdown, setNextOverCountdown] = useState(10);
+  const [countdownActive, setCountdownActive] = useState(false);
   const confettiRef = useRef(false);
   const mountedRef = useRef(true);
   const scoreAnimRef = useRef(false);
+  const spokenNextRef = useRef(false);
 
   // Fetch analysis if not already stored
   const fetchAndReveal = useCallback(async () => {
@@ -193,6 +198,34 @@ export default function OverResult() {
   }, [currentOverIndex, nextOver]);
 
   const isLastOver = currentOverIndex >= 19;
+
+  // Start 10s countdown once analysis is loaded and score animation started
+  useEffect(() => {
+    if (!analysis || capsDeciding || loading) return;
+    // Give the score animation 1.8s to finish before starting countdown
+    const startTimer = setTimeout(() => {
+      setCountdownActive(true);
+    }, 2000);
+    return () => clearTimeout(startTimer);
+  }, [analysis, capsDeciding, loading]);
+
+  // Countdown tick
+  useEffect(() => {
+    if (!countdownActive) return;
+    if (nextOverCountdown <= 0) {
+      handleNext();
+      return;
+    }
+    // Speak at 3s mark
+    if (nextOverCountdown === 3 && !spokenNextRef.current) {
+      spokenNextRef.current = true;
+      const msg = isLastOver ? 'Match complete! Viewing final results.' : 'Moving to the next over!';
+      speak(msg, { rate: 1.0, pitch: 1.1 });
+    }
+    const t = setTimeout(() => setNextOverCountdown((p) => p - 1), 1000);
+    return () => clearTimeout(t);
+  }, [countdownActive, nextOverCountdown, handleNext, isLastOver]);
+
 
   const fScore = analysis?.fieldScore ?? 0;
   const bScore = analysis?.bowlingScore ?? 0;
@@ -439,13 +472,42 @@ export default function OverResult() {
           {/* Leaderboard */}
           <Leaderboard totalScore={totalScore} overNumber={over.overNumber} grade={grade} />
 
-          {/* Next button */}
+          {/* Next button with countdown */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 1.8 }}
             className="text-center"
           >
+            {/* Countdown ring */}
+            {countdownActive && (
+              <div className="flex items-center justify-center gap-3 mb-4">
+                <div className="relative w-12 h-12">
+                  <svg className="w-12 h-12 -rotate-90" viewBox="0 0 48 48">
+                    <circle cx="24" cy="24" r="20" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="4" />
+                    <circle
+                      cx="24" cy="24" r="20"
+                      fill="none"
+                      stroke={nextOverCountdown <= 3 ? '#FF3B5C' : '#00FF9D'}
+                      strokeWidth="4"
+                      strokeLinecap="round"
+                      strokeDasharray={`${2 * Math.PI * 20}`}
+                      strokeDashoffset={`${2 * Math.PI * 20 * (1 - nextOverCountdown / 10)}`}
+                      style={{ transition: 'stroke-dashoffset 1s linear, stroke 0.3s' }}
+                    />
+                  </svg>
+                  <span
+                    className="absolute inset-0 flex items-center justify-center font-orbitron text-sm font-bold"
+                    style={{ color: nextOverCountdown <= 3 ? '#FF3B5C' : '#00FF9D' }}
+                  >
+                    {nextOverCountdown}
+                  </span>
+                </div>
+                <span className="font-outfit text-xs text-text-muted">
+                  {isLastOver ? 'Match ends in' : 'Next over in'} {nextOverCountdown}s
+                </span>
+              </div>
+            )}
             <motion.button
               whileHover={{ scale: 1.03, boxShadow: '0 0 25px rgba(0,255,157,0.2)' }}
               whileTap={{ scale: 0.97 }}

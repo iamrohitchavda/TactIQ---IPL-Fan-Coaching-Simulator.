@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useMatchStore } from '../store/matchStore';
+import { fakeFanNames } from '../data/matchData';
+
+function seededRand(seed: number): number {
+  const x = Math.sin(seed * 9973 + 49297) * 49297;
+  return x - Math.floor(x);
+}
 
 export default function MatchSummary() {
   const { overScores, reset, liveOvers, matchContext } = useMatchStore();
@@ -55,6 +61,20 @@ export default function MatchSummary() {
   }, [totalScore, overScores.length]);
 
   const rankLabel = rankPct <= 5 ? 'Top 5%' : rankPct <= 15 ? 'Top 15%' : rankPct <= 30 ? 'Top 30%' : 'Above Average';
+
+  // Final cumulative leaderboard
+  const finalLeaderboard = useMemo(() => {
+    const maxPossible = overScores.length * 100;
+    const entries = fakeFanNames.map((name, i) => ({
+      name,
+      score: Math.max(50, Math.min(maxPossible, Math.round(totalScore + (seededRand(totalScore * 7 + i * 31) - 0.48) * maxPossible * 0.4))),
+    }));
+    entries.push({ name: '★ You', score: totalScore });
+    entries.sort((a, b) => b.score - a.score);
+    return entries;
+  }, [totalScore, overScores.length]);
+
+  const userFinalRank = finalLeaderboard.findIndex((e) => e.name === '★ You') + 1;
 
   // Radar chart
   const radarData = useMemo(() => {
@@ -122,6 +142,79 @@ export default function MatchSummary() {
               </span>
             </div>
             <span className="text-text-dim text-xs font-orbitron">OV {lastOver?.overNumber || 20}</span>
+          </div>
+        </motion.div>
+
+        {/* ─── FINAL LEADERBOARD ─── */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="glass-panel p-5 mb-8"
+        >
+          <div className="flex items-center gap-2 mb-4">
+            <span className="text-2xl">🏆</span>
+            <span className="font-orbitron text-sm text-accent-gold tracking-wider">FINAL LEADERBOARD</span>
+            <span className="ml-auto font-outfit text-[10px] text-text-muted">{overScores.length} overs played</span>
+          </div>
+
+          <div className="space-y-1.5">
+            {finalLeaderboard.slice(0, 10).map((entry, i) => {
+              const isUser = entry.name === '★ You';
+              const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : null;
+              const maxScore = overScores.length * 100;
+              const pct = Math.round((entry.score / maxScore) * 100);
+              return (
+                <motion.div
+                  key={entry.name}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.05 * i }}
+                  className={`flex items-center gap-3 p-2.5 rounded-xl transition-all ${
+                    isUser
+                      ? 'bg-accent-green/10 border border-accent-green/30'
+                      : 'bg-white/[0.02] border border-white/[0.04]'
+                  }`}
+                >
+                  <span className="font-orbitron text-[10px] w-5 text-center" style={{ color: isUser ? '#00FF9D' : '#556677' }}>
+                    {medal || `${i + 1}`}
+                  </span>
+                  <span className={`font-outfit text-sm flex-1 ${isUser ? 'text-accent-green font-bold' : 'text-white'}`}>
+                    {isUser ? 'You' : entry.name}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <div className="w-16 h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full"
+                        style={{
+                          width: `${pct}%`,
+                          background: isUser ? '#00FF9D' : i < 3 ? '#FFD700' : '#334455',
+                        }}
+                      />
+                    </div>
+                    <span className={`font-orbitron text-sm tabular-nums ${isUser ? 'text-accent-green font-bold' : 'text-white/70'}`}>
+                      {entry.score}
+                    </span>
+                  </div>
+                </motion.div>
+              );
+            })}
+            {userFinalRank > 10 && (
+              <div className="border-t border-white/[0.06] pt-2 mt-2">
+                <div className="flex items-center gap-3 p-2.5 rounded-xl bg-accent-green/10 border border-accent-green/30">
+                  <span className="font-orbitron text-[10px] w-5 text-center text-accent-green">#{userFinalRank}</span>
+                  <span className="font-outfit text-sm flex-1 text-accent-green font-bold">You</span>
+                  <span className="font-orbitron text-sm tabular-nums text-accent-green font-bold">{totalScore}</span>
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="mt-4 pt-3 border-t border-white/[0.04] text-center">
+            <p className="font-outfit text-xs text-text-muted">
+              Your final rank: {' '}
+              <span className="font-orbitron text-accent-gold font-bold">#{userFinalRank}</span>
+              {' '}of {finalLeaderboard.length} fan coaches  •  {rankLabel}
+            </p>
           </div>
         </motion.div>
 

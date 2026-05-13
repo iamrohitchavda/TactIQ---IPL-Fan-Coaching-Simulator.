@@ -1,11 +1,16 @@
 import { useEffect, useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { useMatchStore } from '../store/matchStore';
+import { announceGameStart, announceCountdown, announceTimeUp } from '../services/audioFx';
 
 export default function Timer() {
   const phase = useMatchStore((s) => s.phase);
   const [timeLeft, setTimeLeft] = useState(30);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Guard: track which countdown numbers have already been spoken to prevent duplicates
+  const spokenRef = useRef<Set<number>>(new Set());
+  // Guard: track if we already played the start announcement for this predict phase
+  const startAnnouncedRef = useRef(false);
 
   useEffect(() => {
     if (phase !== 'predict') {
@@ -13,13 +18,32 @@ export default function Timer() {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
+      // Reset guards when leaving predict phase
+      spokenRef.current = new Set();
+      startAnnouncedRef.current = false;
+      setTimeLeft(30);
       return;
+    }
+
+    // Announce the start once when entering predict phase
+    if (!startAnnouncedRef.current) {
+      startAnnouncedRef.current = true;
+      announceGameStart();
     }
 
     intervalRef.current = setInterval(() => {
       setTimeLeft((prev) => {
-        if (prev <= 1) {
+        const next = prev - 1;
+
+        // Speak countdown from 10 down to 1
+        if (next >= 1 && next <= 10 && !spokenRef.current.has(next)) {
+          spokenRef.current.add(next);
+          announceCountdown(next);
+        }
+
+        if (next <= 0) {
           if (intervalRef.current) clearInterval(intervalRef.current);
+          announceTimeUp();
           const store = useMatchStore.getState();
           const hasValid = store.fanPlacements.length === 9 && store.selectedBowler !== null;
           if (hasValid) {
@@ -29,7 +53,7 @@ export default function Timer() {
           }
           return 0;
         }
-        return prev - 1;
+        return next;
       });
     }, 1000);
 

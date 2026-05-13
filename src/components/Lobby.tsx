@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { motion, type Variants } from "framer-motion";
 import { useMatchStore } from "../store/matchStore";
-import { matchInfo } from "../data/matchData";
+import { generateMatch } from "../data/matchGenerator";
 
 function useCounter(
   initial: number,
@@ -25,8 +25,23 @@ function useCounter(
 }
 
 export default function Lobby() {
-  const { setPhase } = useMatchStore();
+  const { setPhase, setLiveOvers, setMatchContext } = useMatchStore();
   const waitingCount = useCounter(2341, 2100, 2800, 3000);
+  const [matchData] = useState(() => generateMatch());
+
+  // Load generated match into store on mount
+  useEffect(() => {
+    const { overs, team1, team2, venue, title } = matchData;
+    setLiveOvers(overs, 'demo', title);
+    setMatchContext({
+      team1: { name: team1.name, short: team1.short, captain: team1.captain, players: team1.players, score: { runs: 0, wickets: 0, overs: 0 }, batting: true },
+      team2: { name: team2.name, short: team2.short, captain: team2.captain, players: team2.players, score: { runs: 0, wickets: 0, overs: 0 }, batting: false },
+      currentOver: 0,
+      venue,
+      matchTitle: title,
+      tossWinner: team1.short,
+    });
+  }, [matchData, setLiveOvers, setMatchContext]);
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -127,10 +142,10 @@ export default function Lobby() {
           <div className="flex items-center justify-center gap-4 mb-4">
             <div className="flex flex-col items-center">
               <span className="font-orbitron text-xl sm:text-2xl font-bold text-accent-cyan">
-                {matchInfo.team1}
+                {matchData.team1.short}
               </span>
               <span className="font-outfit text-[10px] text-text-muted mt-0.5">
-                {matchInfo.team1Full}
+                {matchData.team1.name}
               </span>
             </div>
             <div className="flex flex-col items-center gap-1">
@@ -139,19 +154,19 @@ export default function Lobby() {
             </div>
             <div className="flex flex-col items-center">
               <span className="font-orbitron text-xl sm:text-2xl font-bold text-accent-red">
-                {matchInfo.team2}
+                {matchData.team2.short}
               </span>
               <span className="font-outfit text-[10px] text-text-muted mt-0.5">
-                {matchInfo.team2Full}
+                {matchData.team2.name}
               </span>
             </div>
           </div>
           <div className="space-y-1">
             <p className="font-outfit text-xs text-text-muted">
-              {matchInfo.venue}
+              {matchData.venue}
             </p>
             <p className="font-outfit text-xs text-text-muted">
-              {matchInfo.time}
+              7:30 PM IST
             </p>
           </div>
           <div className="mt-4 pt-4 border-t border-white/[0.06]">
