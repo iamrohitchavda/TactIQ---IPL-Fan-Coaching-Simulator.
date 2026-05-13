@@ -13,7 +13,7 @@ const pageVariants = {
   exit: { opacity: 0, y: -20, scale: 0.98 },
 };
 
-const pageTransition = { duration: 0.35, ease: [0.4, 0, 0.2, 1] };
+const pageTransition = { duration: 0.35, ease: [0.4, 0, 0.2, 1] as const };
 
 const pages: Record<string, React.ReactNode> = {
   lobby: <Lobby />,
